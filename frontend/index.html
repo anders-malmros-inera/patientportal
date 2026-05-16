@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="sv">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Patientportal - Receptförnyelse</title>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="panel">
+        <h1>Patientportal</h1>
+        <p class="lead">Logga in för att se recept från Läkemedelskollen och få råd om förnyelse.</p>
+
+        <form id="login-form" class="login-form">
+          <label for="personnummer">Personnummer</label>
+          <input id="personnummer" name="personnummer" placeholder="ÅÅÅÅMMDDNNNN" required />
+          <button type="submit">Logga in</button>
+        </form>
+
+        <p id="status" class="status"></p>
+      </section>
+
+      <section id="dashboard" class="panel hidden">
+        <h2>Ladda upp receptinformation från Läkemedelskollen</h2>
+        <p class="lead">
+          Öppna Dokument längst ner på receptlistningen i Läkemedelskollen och ladda ner PDF:en "Aktuella recept".
+          Ladda upp PDF-filen direkt här.
+        </p>
+        <form id="scrape-upload-form" class="upload-form">
+          <label for="scrape-file">PDF från Läkemedelskollen</label>
+          <input id="scrape-file" name="scrape-file" type="file" accept=".pdf,application/pdf" />
+          <button type="submit">Importera fil</button>
+        </form>
+
+        <h2>Lägg till mediciner</h2>
+        <p class="lead">
+          Skriv ett sökbegrepp, öppna FASS-sökningen, kopiera exakt läkemedelsnamn och klistra in samma fält för att lägga till.
+        </p>
+        <form id="manual-medication-form" class="manual-medication-form">
+          <label for="manual-medication-name">Läkemedelsnamn</label>
+          <input
+            id="manual-medication-name"
+            name="manual-medication-name"
+            placeholder="Exempel: Alvedon tablett 500 mg"
+            required
+          />
+          <div class="manual-medication-actions">
+            <button type="button" id="manual-medication-search-btn">Sök i FASS</button>
+            <button type="submit">Lägg till i listan</button>
+          </div>
+        </form>
+
+        <h2>Dina recept</h2>
+        <div id="prescriptions"></div>
+      </section>
+    </main>
+
+    <script src="app.js" defer></script>
+  </body>
+</html>

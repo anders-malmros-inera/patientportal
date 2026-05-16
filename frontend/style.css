@@ -1,0 +1,294 @@
+:root {
+  --bg-start: #f3efe0;
+  --bg-end: #dae4f2;
+  --panel: #ffffff;
+  --text: #1f2933;
+  --muted: #52606d;
+  --primary: #1f6feb;
+  --danger: #b42318;
+  --success: #157347;
+  --border: #d9e2ec;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  font-family: "Segoe UI", "Helvetica Neue", sans-serif;
+  color: var(--text);
+  background: radial-gradient(circle at top left, var(--bg-start), var(--bg-end));
+}
+
+.app-shell {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 2rem 1rem 3rem;
+  display: grid;
+  gap: 1rem;
+}
+
+.panel {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  padding: 1rem;
+  box-shadow: 0 8px 28px rgba(15, 23, 42, 0.08);
+}
+
+.lead {
+  color: var(--muted);
+}
+
+.login-form {
+  display: grid;
+  gap: 0.6rem;
+  max-width: 360px;
+}
+
+.upload-form {
+  display: grid;
+  gap: 0.6rem;
+  margin-bottom: 1rem;
+}
+
+.manual-medication-form {
+  display: grid;
+  gap: 0.6rem;
+  margin-bottom: 1rem;
+}
+
+.manual-medication-actions {
+  display: flex;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+input,
+button {
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  padding: 0.7rem 0.8rem;
+  font-size: 1rem;
+}
+
+button {
+  background: var(--primary);
+  color: #fff;
+  border: none;
+  cursor: pointer;
+}
+
+.status {
+  min-height: 1.4rem;
+  color: var(--muted);
+}
+
+.hidden {
+  display: none;
+}
+
+.card {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 0.8rem;
+  margin-bottom: 0.6rem;
+  background: #fff;
+}
+
+.card h3 {
+  margin: 0 0 0.4rem;
+  font-size: 1rem;
+}
+
+.card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.remove-prescription-btn {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 1px solid #f1b0b7;
+  background: #f8d7da;
+  color: #842029;
+  font-size: 1rem;
+  font-weight: 700;
+  line-height: 1;
+  padding: 0;
+}
+
+.remove-prescription-btn:hover {
+  background: #f1b0b7;
+}
+
+.rx-meta {
+  color: #334e68;
+  margin-bottom: 0.15rem;
+}
+
+.rx-meta.status-active {
+  color: #0f5132;
+  font-weight: 700;
+}
+
+.rx-meta.status-missing {
+  color: #842029;
+  font-weight: 700;
+}
+
+.fass-link-btn {
+  border: none;
+  padding: 0;
+  background: transparent;
+  color: #0b5ed7;
+  text-decoration: underline;
+  cursor: pointer;
+  font: inherit;
+}
+
+.ordination {
+  margin-top: 0.7rem;
+  padding: 0.65rem 0.7rem;
+  border-radius: 8px;
+  border: 1px solid #bfd8f2;
+  background: linear-gradient(180deg, #f7fbff 0%, #eef5fd 100%);
+}
+
+.ordination h4 {
+  margin: 0 0 0.45rem;
+  font-size: 0.95rem;
+  letter-spacing: 0.02em;
+}
+
+.ordination-row {
+  margin-bottom: 0.25rem;
+  line-height: 1.35;
+}
+
+.ordination-row:last-child {
+  margin-bottom: 0;
+}
+
+.ordination-row .label {
+  font-weight: 700;
+}
+
+.renewal-inline {
+  margin-top: 0.7rem;
+  padding: 0.65rem 0.7rem;
+  border-radius: 8px;
+  border: 1px solid #e4d6b0;
+  background: linear-gradient(180deg, #fffdf6 0%, #fff8e9 100%);
+}
+
+.renewal-inline h4 {
+  margin: 0 0 0.45rem;
+  font-size: 0.95rem;
+  letter-spacing: 0.02em;
+}
+
+.card-prescription {
+  position: relative;
+}
+
+.card-header-clickable {
+  cursor: pointer;
+  user-select: none;
+}
+
+.card-header-clickable:hover {
+  background-color: #f9f9f9;
+  border-radius: 10px 10px 0 0;
+}
+
+.expand-indicator {
+  display: inline-block;
+  margin-left: 0.5rem;
+  transition: transform 0.2s ease-in-out;
+  font-size: 0.8rem;
+  color: #52606d;
+}
+
+.card-prescription[data-expanded="true"] .expand-indicator {
+  transform: rotate(90deg);
+}
+
+.card-content-collapsible {
+  max-height: 9999px;
+  overflow: hidden;
+  transition: max-height 0.2s ease-in-out;
+}
+
+.card-prescription[data-expanded="false"] .card-content-collapsible {
+  max-height: 0;
+  overflow: hidden;
+}
+
+.card-header-clickable.renewal-green {
+  background-color: #d1e7dd;
+  border-bottom: 2px solid #badbcc;
+}
+
+.card-header-clickable.renewal-yellow {
+  background-color: #fff3cd;
+  border-bottom: 2px solid #ffecb5;
+}
+
+.card-header-clickable.renewal-red {
+  background-color: #f8d7da;
+  border-bottom: 2px solid #f5c2c7;
+}
+
+.time-group {
+  margin-bottom: 1rem;
+}
+
+.time-group-title {
+  margin: 0.3rem 0 0.5rem;
+  font-size: 1rem;
+  color: #102a43;
+}
+
+.badge {
+  font-size: 0.85rem;
+  font-weight: 700;
+  display: inline-block;
+  padding: 0.25rem 0.5rem;
+  border-radius: 999px;
+  margin-bottom: 0.35rem;
+}
+
+.badge.renewal-green {
+  color: #0f5132;
+  background: #d1e7dd;
+  border: 1px solid #badbcc;
+}
+
+.badge.renewal-yellow {
+  color: #664d03;
+  background: #fff3cd;
+  border: 1px solid #ffecb5;
+}
+
+.badge.renewal-red {
+  color: #842029;
+  background: #f8d7da;
+  border: 1px solid #f5c2c7;
+}
+
+@media (max-width: 600px) {
+  .app-shell {
+    padding: 1rem 0.75rem 2rem;
+  }
+
+  .ordination-row {
+    display: grid;
+    gap: 0.1rem;
+  }
+}
