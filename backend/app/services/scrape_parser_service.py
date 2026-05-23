@@ -29,6 +29,16 @@ class ScrapeParserService:
     )
 
     _unit_pattern = r"(?:kapse[l1i](?:/kapse[l1i]ar)?|kapse[l1i]ar|tablett(?:\(er\)|er)?)"
+    _date_pattern = r"\d{4}[-/]\d{2}[-/]\d{2}"
+    _prescriber_pattern = re.compile(r"([A-ZÅÄÖ][A-Za-zÅÄÖåäö\-\s]+),,\s*Läkare")
+    _package_row_pattern = re.compile(r"^[\dOil]+\s*[xX]\s*[\dOil]+")
+    _token_pattern = re.compile(r"^[A-ZÅÄÖa-zåäö][A-Za-zÅÄÖåäö-]+")
+    _line_token_pattern = re.compile(r"^[A-Za-zÅÄÖåäö][A-Za-zÅÄÖåäö-]+$")
+    _refill_pattern = re.compile(r"^\d+\s+av\s+\d+")
+    _parenthesized_pattern = re.compile(r"^\([^)]+\)$")
+    _label_starts_active_substance = ("ej", "patient", "galler", "minsta", "utskrivet", "listan")
+    _label_starts_medication_name = ("ej", "patient", "galler", "minsta")
+    _ignored_medication_tokens = {"aktuella", "recept", "forskrivet", "anvandning"}
     _valid_until_pattern = re.compile(
         r"g[aä]ll?er\s*t\.?\s*o\.?\s*m\.?\s*:?\s*([0-9oOil]{4}[-/][0-9oOil]{2}[-/][0-9oOil]{2})",
         flags=re.IGNORECASE,
@@ -82,6 +92,26 @@ class ScrapeParserService:
         if not folded:
             return True
         return any(phrase in folded for phrase in self._stop_phrases)
+
+    @staticmethod
+    def _non_empty_lines(block: str) -> list[str]:
+        return [line.strip() for line in block.splitlines() if line.strip()]
+
+    def _contains_date(self, line: str) -> bool:
+        return bool(re.search(self._date_pattern, line))
+
+    def _is_refill_summary_line(self, line: str) -> bool:
+        return bool(self._refill_pattern.match(line))
+
+    def _is_parenthesized_line(self, line: str) -> bool:
+        return bool(self._parenthesized_pattern.match(line))
+
+    def _is_recent_dispense_line(self, line: str) -> bool:
+        return "," in line and self._contains_date(line)
+
+    def _is_labeled_line(self, line: str, labels: tuple[str, ...]) -> bool:
+        folded = self._fold_text(line)
+        return any(folded.startswith(label) for label in labels)
 
     def _extract_personnummer(self, text: str) -> str | None:
         match = re.search(r",\s*([\dOil]{8}(?:[\dOil]{4})?)\b", text)
@@ -138,7 +168,8 @@ class ScrapeParserService:
         prescribed_product = self._extract_prescribed_product(block)
         active_substance_name = self._extract_medication_name(block)
         medication_name = self._build_display_medication_name(active_substance_name, prescribed_product)
-        active_substance = self._extract_active_substance(block, active_substance_name)
+        product_based_substance = self._extract_active_substance_from_product(medication_name)
+        active_substance = self._extract_active_substance(block, product_based_substance or active_substance_name)
         dispensed_product = self._extract_dispensed_product(block)
         prescriber_name = self._extract_prescriber_name(block)
         prescriber_organization = self._extract_prescriber_organization(block)
@@ -153,7 +184,7 @@ class ScrapeParserService:
         next_benefit_dispense_date = self._extract_next_benefit_dispense_date(block)
         subsidy_eligible = self._extract_subsidy_eligible(block)
         instruction_text = self._extract_instruction_text(block)
-        dose_per_intake, dose_unit = self._extract_dose(block)
+        dose_per_intake, dose_unit = self._extract_dose(block, instruction_text)
         administration_times = self._extract_administration_times(instruction_text)
 
         times_count = len(administration_times) if administration_times else 1
@@ -194,14 +225,29 @@ class ScrapeParserService:
         )
 
     def _extract_active_substance(self, block: str, fallback: str) -> str:
-        lines = [line.strip() for line in block.splitlines() if line.strip()]
+        lines = self._non_empty_lines(block)
         for line in lines:
+            if self._is_recent_dispense_line(line):
+                continue
+            if self._is_labeled_line(line, self._label_starts_active_substance):
+                continue
+            if self._is_refill_summary_line(line):
+                continue
+            if self._is_parenthesized_line(line):
+                continue
+
             token = line.split()[0] if line.split() else ""
-            if token and re.match(r"^[A-Za-zÅÄÖåäö][A-Za-zÅÄÖåäö-]+$", token):
-                folded = self._fold_text(token)
-                if folded not in {"lakemedel", "verksamt", "patient", "galler"}:
+            if token and self._line_token_pattern.match(token):
+                token_folded = self._fold_text(token)
+                if token_folded not in {"lakemedel", "verksamt", "patient", "galler"}:
                     return token
         return fallback
+
+    def _extract_active_substance_from_product(self, product_name: str | None) -> str | None:
+        if not product_name:
+            return None
+        match = re.match(r"^([A-ZÅÄÖa-zåäö][A-Za-zÅÄÖåäö-]+)", product_name.strip())
+        return match.group(1) if match else None
 
     def _build_display_medication_name(self, active_substance: str, prescribed_product: str | None) -> str:
         if not prescribed_product:
@@ -214,44 +260,75 @@ class ScrapeParserService:
         )
         match = duplicate_prefix.match(normalized)
         if match:
-            return match.group(2)
-        return normalized
+            normalized = match.group(2)
+
+        # Normalize noisy product qualifiers from the PDF table extraction.
+        normalized = re.sub(r",\s*h[åa]rd\b", "", normalized, flags=re.IGNORECASE)
+        normalized = re.sub(r"\b(kapsel|tablett),\s+(?=\d)", r"\1 ", normalized, flags=re.IGNORECASE)
+        normalized = re.sub(r"\s+AB$", "", normalized)
+        return " ".join(normalized.split())
 
     def _extract_prescribed_product(self, block: str) -> str | None:
-        lines = [line.strip() for line in block.splitlines() if line.strip()]
-        for line in lines:
-            if "," in line and any(unit in self._fold_text(line) for unit in ("kapsel", "tablett", "filmdragerad")):
-                return line
+        lines = self._non_empty_lines(block)
+        package_index = next(
+            (idx for idx, line in enumerate(lines) if self._package_row_pattern.match(line)),
+            len(lines),
+        )
+        header_lines = lines[:package_index]
+
+        collecting = False
+        collected: list[str] = []
+        for line in header_lines:
+            folded = self._fold_text(line)
+            if not collecting:
+                has_date = self._contains_date(line)
+                if "," in line and any(unit in folded for unit in ("kapsel", "tablett", "filmdragerad")) and not has_date:
+                    collecting = True
+                    collected.append(line)
+                continue
+
+            if self._is_stop_line(line):
+                break
+            if self._is_parenthesized_line(line):
+                break
+            if self._contains_date(line):
+                break
+            if re.search(r",,\s*Läkare", line):
+                break
+
+            collected.append(line)
+
+        if collected:
+            return " ".join(collected)
         return None
 
     def _extract_dispensed_product(self, block: str) -> str | None:
-        lines = [line.strip() for line in block.splitlines() if line.strip()]
+        lines = self._non_empty_lines(block)
         for idx, line in enumerate(lines):
-            if re.search(r"\d{4}-\d{2}-\d{2}", line) and idx > 0:
+            if self._contains_date(line) and idx > 0:
                 candidate = lines[idx - 1]
                 if any(unit in self._fold_text(candidate) for unit in ("kapsel", "tablett", "filmdragerad")):
                     return candidate
         return None
 
     def _extract_prescriber_name(self, block: str) -> str | None:
-        match = re.search(r"([A-ZÅÄÖ][A-Za-zÅÄÖåäö\-\s]+),,\s*Läkare", block)
+        match = self._prescriber_pattern.search(block)
         if match:
             return match.group(1).strip()
         return None
 
-    def _extract_prescriber_organization(self, block: str) -> str | None:
-        lines = [line.strip() for line in block.splitlines() if line.strip()]
+    def _extract_prescriber_line(self, block: str, offset: int) -> str | None:
+        lines = self._non_empty_lines(block)
         for idx, line in enumerate(lines):
-            if "Läkare" in line and idx + 1 < len(lines):
-                return lines[idx + 1]
+            if "Läkare" in line and idx + offset < len(lines):
+                return lines[idx + offset]
         return None
 
+    def _extract_prescriber_organization(self, block: str) -> str | None:
+        return self._extract_prescriber_line(block, offset=1)
+
     def _extract_prescriber_location(self, block: str) -> str | None:
-        lines = [line.strip() for line in block.splitlines() if line.strip()]
-        for idx, line in enumerate(lines):
-            if "Läkare" in line and idx + 2 < len(lines):
-                return lines[idx + 2]
-        return None
+        return self._extract_prescriber_line(block, offset=2)
 
     def _extract_prescriber_phone(self, block: str) -> str | None:
         match = re.search(r"\b\d{2,3}[-\s]?\d{2,3}[-\s]?\d{2,3}\b", block)
@@ -298,19 +375,28 @@ class ScrapeParserService:
         return self._fold_text(match.group(1)) == "ja"
 
     def _extract_medication_name(self, block: str) -> str:
-        lines = [line.strip() for line in block.splitlines() if line.strip()]
+        lines = self._non_empty_lines(block)
         for line in lines:
             if self._is_stop_line(line):
                 continue
             folded = self._fold_text(line)
             if folded.startswith("utskrivet") or folded.startswith("hogkostnadsperiod"):
                 continue
-            if re.search(r"[\dOil]{4}[-/][\dOil]{2}[-/][\dOil]{2}", line):
+            if re.search(rf"^{self._date_pattern}$", line):
                 continue
-            token_match = re.match(r"^[A-ZÅÄÖa-zåäö][A-Za-zÅÄÖåäö-]+", line)
+            if self._is_recent_dispense_line(line):
+                continue
+            if self._is_labeled_line(line, self._label_starts_medication_name):
+                continue
+            if self._is_refill_summary_line(line):
+                continue
+            if self._is_parenthesized_line(line):
+                continue
+
+            token_match = self._token_pattern.match(line)
             if token_match:
                 token = token_match.group(0)
-                if self._fold_text(token) in {"aktuella", "recept", "forskrivet", "anvandning"}:
+                if self._fold_text(token) in self._ignored_medication_tokens:
                     continue
                 return token
         return "Okänt läkemedel"
@@ -332,22 +418,46 @@ class ScrapeParserService:
             return int(self._ocr_digit_fix(match.group(1)))
         return 0
 
-    def _extract_dose(self, block: str) -> tuple[float | None, str | None]:
-        match = re.search(
-            rf"([\dOil]+(?:[\.,][\dOil]+)?)\s+({self._unit_pattern})",
-            block,
-            flags=re.IGNORECASE,
-        )
-        if not match:
-            return None, None
+    def _extract_dose(self, block: str, instruction_text: str | None = None) -> tuple[float | None, str | None]:
+        if instruction_text:
+            instruction_match = re.search(
+                rf"^\s*([\dOil]+(?:[\.,][\dOil]+)?)\s+({self._unit_pattern})\b",
+                instruction_text,
+                flags=re.IGNORECASE,
+            )
+            if instruction_match:
+                dose_per_intake = float(self._ocr_digit_fix(instruction_match.group(1)).replace(",", "."))
+                raw_unit = instruction_match.group(2).lower()
+                dose_unit = "kapsel" if "kapsel" in raw_unit else "tablett"
+                return dose_per_intake, dose_unit
 
-        dose_per_intake = float(self._ocr_digit_fix(match.group(1)).replace(",", "."))
-        raw_unit = match.group(2).lower()
-        dose_unit = "kapsel" if "kapsel" in raw_unit else "tablett"
-        return dose_per_intake, dose_unit
+        # Fallback for documents without a parseable instruction text.
+        lines = self._non_empty_lines(block)
+        for line in lines:
+            folded = self._fold_text(line)
+            if folded.startswith("1 x") or self._package_row_pattern.match(line):
+                continue
+
+            match = re.match(
+                rf"^([\dOil]+(?:[\.,][\dOil]+)?)\s+({self._unit_pattern})\b",
+                line,
+                flags=re.IGNORECASE,
+            )
+            if not match:
+                continue
+
+            if not any(token in folded for token in (" morgon", " kvall", " kväll", " natt", " daglig", " till ", " for ", " för ")):
+                continue
+
+            dose_per_intake = float(self._ocr_digit_fix(match.group(1)).replace(",", "."))
+            raw_unit = match.group(2).lower()
+            dose_unit = "kapsel" if "kapsel" in raw_unit else "tablett"
+            return dose_per_intake, dose_unit
+
+        return None, None
 
     def _extract_instruction_text(self, block: str) -> str | None:
-        lines = [line.strip() for line in block.splitlines() if line.strip()]
+        lines = self._non_empty_lines(block)
         start_index: int | None = None
         for index, line in enumerate(lines):
             if re.match(rf"^[\dOil]+(?:[\.,][\dOil]+)?\s+{self._unit_pattern}", line, flags=re.IGNORECASE):
@@ -361,7 +471,7 @@ class ScrapeParserService:
         for line in lines[start_index:]:
             if self._is_stop_line(line):
                 break
-            if re.fullmatch(r"[\dOil]{4}[-/][\dOil]{2}[-/][\dOil]{2}", line):
+            if re.fullmatch(rf"[\dOil]{{4}}[-/][\dOil]{{2}}[-/][\dOil]{{2}}", line):
                 break
             if re.search(r"[\dOil]+\s+av\s+[\dOil]+\s+uttag\s+kvar", line, flags=re.IGNORECASE):
                 break
@@ -380,7 +490,7 @@ class ScrapeParserService:
         if "lunch" in lowered or "middag" in lowered or "eftermiddag" in lowered:
             times.append("dag")
         if "kväll" in lowered or "kvall" in lowered:
-            times.append("kvall")
+            times.append("kväll")
         if "natt" in lowered:
             times.append("natt")
         if "dagligen" in lowered and not times:

@@ -8,7 +8,13 @@ from pypdf import PdfReader
 
 from .clients.lakemedelskollen_client import LakemedelskollenClient, LakemedelskollenIntegrationError
 from .config import settings
-from .database import delete_prescription, init_db, load_prescriptions, save_prescriptions, save_scrape_document
+from .database import (
+    delete_prescription,
+    init_db,
+    load_prescriptions,
+    save_prescriptions,
+    save_scrape_document,
+)
 from .dependencies import get_current_patient
 from .schemas import (
     LoginRequest,
@@ -60,8 +66,13 @@ def _merge_prescriptions(current: list[Prescription], historical: list[Prescript
 
 
 def _get_and_persist_prescriptions(personnummer: str) -> list[Prescription]:
-    current = prescription_client.get_prescriptions_for_patient(personnummer)
     historical = load_prescriptions(personnummer)
+
+    if not settings.lakemedelskollen_direct_enabled:
+        return historical
+
+    current = prescription_client.get_prescriptions_for_patient(personnummer)
+
     merged = _merge_prescriptions(current, historical)
     save_prescriptions(personnummer, merged)
     return merged

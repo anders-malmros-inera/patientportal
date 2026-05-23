@@ -86,6 +86,28 @@ button {
   color: var(--muted);
 }
 
+.prescription-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem 0.6rem;
+  margin: -0.15rem 0 0.9rem;
+  padding: 0.7rem 0.8rem;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: linear-gradient(180deg, #fbfcfe 0%, #f4f7fb 100%);
+}
+
+.prescription-legend-title {
+  font-weight: 700;
+  color: #102a43;
+}
+
+.prescription-legend-text {
+  color: var(--muted);
+  font-size: 0.95rem;
+}
+
 .hidden {
   display: none;
 }
@@ -101,6 +123,7 @@ button {
 .card h3 {
   margin: 0 0 0.4rem;
   font-size: 1rem;
+  flex: 1;
 }
 
 .card-header {
@@ -110,13 +133,20 @@ button {
   gap: 0.5rem;
 }
 
+.card-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  margin-left: auto;
+}
+
 .remove-prescription-btn {
   width: 30px;
   height: 30px;
   border-radius: 50%;
-  border: 1px solid #f1b0b7;
-  background: #f8d7da;
-  color: #842029;
+  border: 1px solid #d9e2ec;
+  background: #f4f7fb;
+  color: #334e68;
   font-size: 1rem;
   font-weight: 700;
   line-height: 1;
@@ -124,7 +154,37 @@ button {
 }
 
 .remove-prescription-btn:hover {
-  background: #f1b0b7;
+  background: #d9e2ec;
+}
+
+.remove-prescription-btn.renewal-green {
+  color: #0f5132;
+  background: #d1e7dd;
+  border-color: #badbcc;
+}
+
+.remove-prescription-btn.renewal-green:hover {
+  background: #badbcc;
+}
+
+.remove-prescription-btn.renewal-yellow {
+  color: #664d03;
+  background: #fff3cd;
+  border-color: #ffecb5;
+}
+
+.remove-prescription-btn.renewal-yellow:hover {
+  background: #ffecb5;
+}
+
+.remove-prescription-btn.renewal-red {
+  color: #842029;
+  background: #f8d7da;
+  border-color: #f5c2c7;
+}
+
+.remove-prescription-btn.renewal-red:hover {
+  background: #f5c2c7;
 }
 
 .rx-meta {
@@ -209,10 +269,10 @@ button {
 
 .expand-indicator {
   display: inline-block;
-  margin-left: 0.5rem;
   transition: transform 0.2s ease-in-out;
   font-size: 0.8rem;
   color: #52606d;
+  flex-shrink: 0;
 }
 
 .card-prescription[data-expanded="true"] .expand-indicator {
@@ -285,6 +345,10 @@ button {
 @media (max-width: 600px) {
   .app-shell {
     padding: 1rem 0.75rem 2rem;
+  }
+
+  .prescription-legend {
+    align-items: flex-start;
   }
 
   .ordination-row {

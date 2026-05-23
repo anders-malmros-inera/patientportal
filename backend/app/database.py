@@ -60,7 +60,6 @@ def init_db() -> None:
             )
             """
         )
-
         _ensure_column(connection, "patient_prescriptions", "active_substance", "TEXT NULL")
         _ensure_column(connection, "patient_prescriptions", "prescribed_product", "TEXT NULL")
         _ensure_column(connection, "patient_prescriptions", "dispensed_product", "TEXT NULL")
@@ -314,4 +313,5 @@ def delete_prescription(personnummer: str, prescription_id: str) -> bool:
             """,
             (personnummer, prescription_id),
         )
+
         return cursor.rowcount > 0

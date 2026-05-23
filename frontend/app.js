@@ -94,7 +94,7 @@ function normalizePrescribedName(prescribedName, activeSubstance) {
 }
 
 function buildMedicationDisplay(item) {
-  const prescribedName = normalizeMedicationToken(item.prescribed_product || item.medication_name) || "Okänt läkemedel";
+  const prescribedName = normalizeMedicationToken(item.medication_name || item.prescribed_product) || "Okänt läkemedel";
   const activeSubstance = normalizeMedicationToken(item.active_substance);
   const normalizedPrescribedName = normalizePrescribedName(prescribedName, activeSubstance);
 
@@ -124,8 +124,11 @@ function renderRenewalInline(entry) {
     return '<div class="rx-meta">Förnyelseråd: Ej tillgängligt</div>';
   }
 
-  const daysRemaining = Math.min(entry.estimated_days_left, entry.days_until_validity_ends);
+  const daysRemaining = entry.estimated_days_left;
   const colorClass = getRenewalColorClass(daysRemaining);
+  const reasonLine = entry.reason && entry.reason !== "Ingen åtgärd behövs ännu"
+    ? `<div class="rx-meta">Orsak: ${entry.reason}</div>`
+    : "";
   const issuedByLine = entry.renewal_needed && entry.issued_by
     ? `<div class="rx-meta">Utfärdat av: ${entry.issued_by}</div>`
     : "";
@@ -136,7 +139,7 @@ function renderRenewalInline(entry) {
       <div class="badge ${colorClass}">Dagar kvar: ${daysRemaining}</div>
       <div class="rx-meta">Dagar kvar av läkemedel: ${entry.estimated_days_left}</div>
       <div class="rx-meta">Dagar kvar av receptets giltighet: ${entry.days_until_validity_ends}</div>
-      <div class="rx-meta">Orsak: ${entry.reason}</div>
+      ${reasonLine}
       ${issuedByLine}
     </section>
   `;
@@ -188,17 +191,18 @@ function renderPrescriptions(prescriptions, adviceEntries = []) {
             <article class="card card-prescription" data-prescription-id="${item.id}" data-expanded="false">
               <div class="card-header card-header-clickable${titleColorAttr}" role="button" tabindex="0" aria-expanded="false">
                 <h3>${displayName}</h3>
-                <span class="expand-indicator">▶</span>
-                <button
-                  type="button"
-                  class="remove-prescription-btn"
-                  data-prescription-id="${item.id}"
-                  aria-label="Ta bort ${displayName}"
-                  title="Ta bort recept"
-                  onclick="event.stopPropagation();"
-                >
-                  ×
-                </button>
+                <div class="card-header-actions">
+                  <span class="expand-indicator">▶</span>
+                  <button
+                    type="button"
+                    class="remove-prescription-btn${titleColorAttr}"
+                    data-prescription-id="${item.id}"
+                    aria-label="Ta bort ${displayName}"
+                    title="Ta bort recept"
+                  >
+                    ×
+                  </button>
+                </div>
               </div>
               <div class="card-content-collapsible">
               <div class="rx-meta">Dos/dag: ${item.prescribed_daily_dose}</div>
@@ -255,8 +259,7 @@ function getTitleColorClass(entry) {
   if (!entry) {
     return "";
   }
-  const daysRemaining = Math.min(entry.estimated_days_left, entry.days_until_validity_ends);
-  return getRenewalColorClass(daysRemaining);
+  return getRenewalColorClass(entry.estimated_days_left);
 }
 
 function openFassWindow(url) {
@@ -432,14 +435,48 @@ function togglePrescriptionExpand(element) {
 }
 
 prescriptionsEl.addEventListener("click", async (event) => {
-  const target = event.target;
-  if (!(target instanceof HTMLElement)) {
+  const rawTarget = event.target;
+  const target = rawTarget instanceof Element
+    ? rawTarget
+    : rawTarget instanceof Node
+      ? rawTarget.parentElement
+      : null;
+
+  if (!target) {
     return;
   }
 
-  const clickableHeader = target.closest(".card-header-clickable");
-  if (clickableHeader && !(target instanceof HTMLButtonElement)) {
-    togglePrescriptionExpand(clickableHeader);
+  const button = target.closest(".remove-prescription-btn");
+  if (button instanceof HTMLButtonElement) {
+    event.stopPropagation();
+
+    if (!authToken) {
+      setStatus("Du måste vara inloggad först", true);
+      return;
+    }
+
+    const prescriptionId = button.dataset.prescriptionId;
+    if (!prescriptionId) {
+      setStatus("Kunde inte identifiera receptet", true);
+      return;
+    }
+
+    setStatus("Tar bort recept...");
+    try {
+      const response = await fetch(`${API_BASE_URL}/prescriptions/${encodeURIComponent(prescriptionId)}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${authToken}` },
+      });
+
+      if (!response.ok) {
+        throw new Error("Kunde inte ta bort receptet");
+      }
+
+      await refreshDashboard();
+      setStatus("Receptet är borttaget från listan.");
+    } catch (error) {
+      setStatus(error.message || "Kunde inte ta bort receptet", true);
+    }
     return;
   }
 
@@ -460,36 +497,8 @@ prescriptionsEl.addEventListener("click", async (event) => {
     return;
   }
 
-  const button = target.closest(".remove-prescription-btn");
-  if (!(button instanceof HTMLButtonElement)) {
-    return;
-  }
-
-  if (!authToken) {
-    setStatus("Du måste vara inloggad först", true);
-    return;
-  }
-
-  const prescriptionId = button.dataset.prescriptionId;
-  if (!prescriptionId) {
-    setStatus("Kunde inte identifiera receptet", true);
-    return;
-  }
-
-  setStatus("Tar bort recept...");
-  try {
-    const response = await fetch(`${API_BASE_URL}/prescriptions/${encodeURIComponent(prescriptionId)}`, {
-      method: "DELETE",
-      headers: { Authorization: `Bearer ${authToken}` },
-    });
-
-    if (!response.ok) {
-      throw new Error("Kunde inte ta bort receptet");
-    }
-
-    await refreshDashboard();
-    setStatus("Receptet är borttaget från listan.");
-  } catch (error) {
-    setStatus(error.message || "Kunde inte ta bort receptet", true);
+  const clickableHeader = target.closest(".card-header-clickable");
+  if (clickableHeader) {
+    togglePrescriptionExpand(clickableHeader);
   }
 });
