@@ -278,6 +278,9 @@ Gäller t.o.m.: 2027-05-15
 
     assert len(result.prescriptions) == 1
     item = result.prescriptions[0]
+    assert item.medication_name == "Escitalopram Accord, filmdragerad tablett 20 mg"
+    assert item.prescribed_product == "Escitalopram Escitalopram Accord, filmdragerad tablett 20 mg"
+    assert item.active_substance == "Escitalopram"
     assert item.package_size == 98
     assert item.prescribed_daily_dose == 1.0
     assert item.dose_per_intake == 1.0
@@ -285,3 +288,42 @@ Gäller t.o.m.: 2027-05-15
     assert item.refill_total == 2
     assert item.remaining_packages == 2
     assert item.has_active_prescription is True
+
+
+def test_parse_scrape_ignores_header_identity_line_for_medication_name() -> None:
+    parser = ScrapeParserService()
+    sample = """Aktuella recept
+Utskrivet: 2026-05-28 10:34
+Agnes Viktoria Malmros, 20070515
+Läkemedel
+Escitalopram Escitalopram Accord,
+filmdragerad tablett 20 mg
+1 x 98 tablett(er)
+(Kan bytas)
+Patient förmånsberättigad:
+Ja
+1 tablett på morgonen För
+humöret
+Camilla Avagliano,,
+Läkare
+SLSO, Psykiatri Södra
+Stockholm
+Nacka
+-
+2026-05-15
+Ej uttaget 2 av 2 uttag kvar
+196 tablett(er)
+Minsta tid mellan
+uttag:
+2 månaders intervall
+Gäller t.o.m.: 2027-05-15
+"""
+
+    result = parser.parse(sample)
+
+    assert len(result.prescriptions) == 1
+    item = result.prescriptions[0]
+    assert item.medication_name == "Escitalopram Accord, filmdragerad tablett 20 mg"
+    assert item.prescribed_product == "Escitalopram Escitalopram Accord, filmdragerad tablett 20 mg"
+    assert not item.medication_name.startswith("Agnes")
+    assert item.active_substance == "Escitalopram"

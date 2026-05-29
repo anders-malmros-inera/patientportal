@@ -36,9 +36,12 @@ class ScrapeParserService:
     _line_token_pattern = re.compile(r"^[A-Za-zÅÄÖåäö][A-Za-zÅÄÖåäö-]+$")
     _refill_pattern = re.compile(r"^\d+\s+av\s+\d+")
     _parenthesized_pattern = re.compile(r"^\([^)]+\)$")
+    _person_identity_pattern = re.compile(r",\s*[\dOil]{8}(?:[\dOil]{4})?\b")
+    _product_unit_tokens = ("kapsel", "tablett", "filmdragerad")
     _label_starts_active_substance = ("ej", "patient", "galler", "minsta", "utskrivet", "listan")
     _label_starts_medication_name = ("ej", "patient", "galler", "minsta")
     _ignored_medication_tokens = {"aktuella", "recept", "forskrivet", "anvandning"}
+    _ignored_active_substance_tokens = {"lakemedel", "verksamt", "patient", "galler", "aktuella", "recept", "utskrivet"}
     _valid_until_pattern = re.compile(
         r"g[aä]ll?er\s*t\.?\s*o\.?\s*m\.?\s*:?\s*([0-9oOil]{4}[-/][0-9oOil]{2}[-/][0-9oOil]{2})",
         flags=re.IGNORECASE,
@@ -112,6 +115,9 @@ class ScrapeParserService:
     def _is_labeled_line(self, line: str, labels: tuple[str, ...]) -> bool:
         folded = self._fold_text(line)
         return any(folded.startswith(label) for label in labels)
+
+    def _is_patient_identity_line(self, line: str) -> bool:
+        return bool(self._person_identity_pattern.search(line))
 
     def _extract_personnummer(self, text: str) -> str | None:
         match = re.search(r",\s*([\dOil]{8}(?:[\dOil]{4})?)\b", text)
@@ -229,6 +235,8 @@ class ScrapeParserService:
         for line in lines:
             if self._is_recent_dispense_line(line):
                 continue
+            if self._is_patient_identity_line(line):
+                continue
             if self._is_labeled_line(line, self._label_starts_active_substance):
                 continue
             if self._is_refill_summary_line(line):
@@ -239,7 +247,7 @@ class ScrapeParserService:
             token = line.split()[0] if line.split() else ""
             if token and self._line_token_pattern.match(token):
                 token_folded = self._fold_text(token)
-                if token_folded not in {"lakemedel", "verksamt", "patient", "galler"}:
+                if token_folded not in self._ignored_active_substance_tokens:
                     return token
         return fallback
 
@@ -278,13 +286,28 @@ class ScrapeParserService:
 
         collecting = False
         collected: list[str] = []
-        for line in header_lines:
+        for idx, line in enumerate(header_lines):
             folded = self._fold_text(line)
             if not collecting:
                 has_date = self._contains_date(line)
-                if "," in line and any(unit in folded for unit in ("kapsel", "tablett", "filmdragerad")) and not has_date:
+                if self._is_stop_line(line) or self._is_parenthesized_line(line) or self._is_patient_identity_line(line):
+                    continue
+
+                has_unit = any(unit in folded for unit in self._product_unit_tokens)
+                if "," in line and has_unit and not has_date:
                     collecting = True
                     collected.append(line)
+                    continue
+
+                # Handle wrapped product names where the first line ends with a comma
+                # and the dosage/form (tablett/kapsel/filmdragerad) appears on next line.
+                if "," in line and not has_date and idx + 1 < len(header_lines):
+                    next_line = header_lines[idx + 1]
+                    next_folded = self._fold_text(next_line)
+                    next_has_unit = any(unit in next_folded for unit in self._product_unit_tokens)
+                    if next_has_unit and not self._contains_date(next_line):
+                        collecting = True
+                        collected.append(line)
                 continue
 
             if self._is_stop_line(line):
@@ -378,6 +401,8 @@ class ScrapeParserService:
         lines = self._non_empty_lines(block)
         for line in lines:
             if self._is_stop_line(line):
+                continue
+            if self._is_patient_identity_line(line):
                 continue
             folded = self._fold_text(line)
             if folded.startswith("utskrivet") or folded.startswith("hogkostnadsperiod"):
